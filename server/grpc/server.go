@@ -8,6 +8,7 @@ import (
 	"google.golang.org/grpc/reflection"
 	"net"
 	"fmt"
+	"google.golang.org/grpc/credentials"
 )
 
 
@@ -15,6 +16,11 @@ type Server struct{
 	grpcSrv      *grpc.Server
 	listner net.Listener
 }
+
+var (
+	crt = "server/certs/server.crt"
+	key = "server/certs/server.key"
+)
 
 
 func (s *Server) FindMaxNumber(stream pb.Numbers_FindMaxNumberServer) error {
@@ -48,10 +54,13 @@ func (s *Server) FindMaxNumber(stream pb.Numbers_FindMaxNumberServer) error {
 }
 
 func NewServer(port string) (*Server, error) {
-	var err error
 	srv := Server{}
 
-	srv.grpcSrv = grpc.NewServer()
+	creds, err := credentials.NewServerTLSFromFile(crt, key)
+
+	srv.grpcSrv = grpc.NewServer(
+		grpc.Creds(creds),
+	)
 
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
@@ -67,7 +76,8 @@ func NewServer(port string) (*Server, error) {
 func (s *Server) Start() {
 	// Register reflection service on gRPC server.
 	reflection.Register(s.grpcSrv)
+	log.Println("Starting server")
 	if err := s.grpcSrv.Serve(s.listner); err != nil {
-		log.Fatalf("failed to serve: %v", err)
+		log.Fatalf("Failed to serve: %v", err)
 	}
 }
