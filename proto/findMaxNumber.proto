@@ -1,0 +1,17 @@
+syntax = "proto3";
+
+package findMaxNumber.grpc.proto;
+
+option go_package = "proto";
+
+service Numbers {
+    rpc FindMaxNumber (stream FindMaxNumberRequest) returns (stream FindMaxNumberResponse) {}
+}
+
+message FindMaxNumberRequest {
+    int64 number = 1;
+}
+
+message FindMaxNumberResponse {
+    int64 maxNumber = 1;
+}
