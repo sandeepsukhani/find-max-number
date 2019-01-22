@@ -21,10 +21,6 @@ import (
 	"io"
 )
 
-const (
-	address     = "localhost:50051"
-)
-
 var (
 	certificate tls.Certificate
 	grpcConn *grpc.ClientConn
@@ -110,7 +106,7 @@ func DoFindMaxNumbersRequest() error {
 	return nil
 }
 
-func Connect() error {
+func Connect(address string) error {
 	creds, err := makeTLS(crt, key, ca)
 	if err != nil {
 		return err

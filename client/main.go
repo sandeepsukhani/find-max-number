@@ -4,10 +4,15 @@ import (
 	"github.com/sandlis/find-max-number/client/grpc"
 	"log"
 	"time"
+	"flag"
 )
 
+var serverUrl = flag.String("serverUrl", "localhost:50051", "Server URL")
+
 func main() {
-	err := grpc.Connect()
+	flag.Parse()
+
+	err := grpc.Connect(*serverUrl)
 	if err != nil{
 		log.Fatal(err)
 	}

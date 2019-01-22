@@ -116,6 +116,7 @@ func NewServer(port string) (*Server, error) {
 	srv.grpcSrv = grpc.NewServer(
 		grpc.Creds(creds),
 	)
+	fmt.Println(port)
 
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
