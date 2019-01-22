@@ -96,7 +96,7 @@ func DoFindMaxNumbersRequest() error {
 	fmt.Println("To stop entering input, press ENTER without any input")
 
 	for {
-		fmt.Print("Enter a number: ")
+		fmt.Print("Enter a number and press ENTER: ")
 		input, err := reader.ReadString('\n')
 		if err != nil{
 			return err
