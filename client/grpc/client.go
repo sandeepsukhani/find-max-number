@@ -34,17 +34,20 @@ var (
 func makeTLS(crtPath, keyPath, caPath string) (credentials.TransportCredentials, error) {
 	var err error
 
+	// Loading certificate
 	certificate, err = tls.LoadX509KeyPair(crtPath, keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("Could not load key pair: %s", err)
 	}
 
+	// Create a certificate pool from the certificate authority
 	certPool := x509.NewCertPool()
 	ca, err := ioutil.ReadFile(caPath)
 	if err != nil {
 		return nil, fmt.Errorf("Could not read ca certificate: %s", err)
 	}
 
+	// Append the certificates from the CA
 	if ok := certPool.AppendCertsFromPEM(ca); !ok {
 		return nil, errors.New("Failed to append ca certs")
 	}
@@ -64,6 +67,7 @@ func receiveMaxNumber(ctx context.Context, stream pb.Numbers_FindMaxNumberClient
 		r, err := stream.Recv()
 		if err != nil {
 			if ctx.Err() == context.Canceled || err == io.EOF {
+				// Either we cancelled context due to end of input or server closed the stream
 				if anyMaxNumberReceived {
 					log.Printf("Final Max Number: %d", maxNumber)
 				} else {
@@ -89,6 +93,7 @@ func DoFindMaxNumbersRequest() error {
 		return fmt.Errorf("Could not start stream: %v", err)
 	}
 
+	// Concurrently receiving max number that server has found so far
 	go receiveMaxNumber(ctx, stream)
 
 	reader := bufio.NewReader(os.Stdin)
@@ -113,6 +118,8 @@ func DoFindMaxNumbersRequest() error {
 		message := []byte(strconv.FormatInt(number, 10))
 		hashed := sha256.Sum256(message)
 
+		// Signing request using clients public key which server will receive eventually during TLS handshake
+		// This helps server authenticate the request
 		signature, err := rsa.SignPKCS1v15(rand.Reader, certificate.PrivateKey.(*rsa.PrivateKey), crypto.SHA256, hashed[:])
 		if err != nil {
 			panic(err)

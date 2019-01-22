@@ -54,6 +54,7 @@ func makeTLS(crtPath, keyPath, caPath string) (credentials.TransportCredentials,
 	}), nil
 }
 
+// Returns public key of client which was received during TLS handshake
 func GetPkey(stream pb.Numbers_FindMaxNumberServer) (*x509.Certificate, error) {
 	var pkey *x509.Certificate
 	p, ok := peer.FromContext(stream.Context())
@@ -87,6 +88,7 @@ func (s *Server) FindMaxNumber(stream pb.Numbers_FindMaxNumberServer) error {
 			}
 		}
 
+		// Validating request signature using clients public key
 		if err = pkey.CheckSignature(x509.SHA256WithRSA, []byte(strconv.FormatInt(in.Number, 10)), in.Sig); err!=nil{
 			fmt.Printf("Ignoring value %v due to invalid signature\n", in.Number)
 		} else {
@@ -105,6 +107,7 @@ func (s *Server) FindMaxNumber(stream pb.Numbers_FindMaxNumberServer) error {
 	}
 }
 
+// Create a new server
 func NewServer(port string) (*Server, error) {
 	srv := Server{}
 
@@ -116,7 +119,6 @@ func NewServer(port string) (*Server, error) {
 	srv.grpcSrv = grpc.NewServer(
 		grpc.Creds(creds),
 	)
-	fmt.Println(port)
 
 	lis, err := net.Listen("tcp", port)
 	if err != nil {
@@ -129,6 +131,7 @@ func NewServer(port string) (*Server, error) {
 	return &srv, nil
 }
 
+// Start listing for gRPC requests
 func (s *Server) Start() {
 	// Register reflection service on gRPC server.
 	reflection.Register(s.grpcSrv)
