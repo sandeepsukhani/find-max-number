@@ -3,7 +3,6 @@ package grpc
 import (
 	"google.golang.org/grpc"
 	"log"
-	mathRand "math/rand"
 	pb "github.com/sandlis/find-max-number/proto"
 	"context"
 	"google.golang.org/grpc/credentials"
@@ -19,6 +18,9 @@ import (
 	"strconv"
 	"time"
 	"io"
+	"bufio"
+	"os"
+	"strings"
 )
 
 var (
@@ -57,17 +59,23 @@ func makeTLS(crtPath, keyPath, caPath string) (credentials.TransportCredentials,
 
 func receiveMaxNumber(ctx context.Context, stream pb.Numbers_FindMaxNumberClient) {
 	var maxNumber int64
+	anyMaxNumberReceived := false
 	for {
 		r, err := stream.Recv()
 		if err != nil {
 			if ctx.Err() == context.Canceled || err == io.EOF {
-				log.Printf("Final Max Number: %d", maxNumber)
+				if anyMaxNumberReceived {
+					log.Printf("Final Max Number: %d", maxNumber)
+				} else {
+					log.Println("No max number")
+				}
 				return
 			}
 			log.Printf("Could not receive data from stream: %v", err)
 		}
 		maxNumber = r.MaxNumber
-		log.Printf("Max Number so far: %d", maxNumber)
+		anyMaxNumberReceived = true
+		log.Printf("Max Number so far: %d\n", maxNumber)
 	}
 }
 
@@ -83,24 +91,39 @@ func DoFindMaxNumbersRequest() error {
 
 	go receiveMaxNumber(ctx, stream)
 
-	randomNumberGenerator := mathRand.New(mathRand.NewSource(time.Now().UnixNano()))
+	reader := bufio.NewReader(os.Stdin)
+	var number int64
+	fmt.Println("To stop entering input, press ENTER without any input")
 
-	for i := 0; i < 5; i++ {
-		rnd := randomNumberGenerator.Int63n(1000)
+	for {
+		fmt.Print("Enter a number: ")
+		input, err := reader.ReadString('\n')
+		if err != nil{
+			return err
+		}
+		if input == "\n"{
+			break
+		}
 
-		message := []byte(strconv.FormatInt(rnd, 10))
+		number, err = strconv.ParseInt(strings.Replace(input, "\n", "", -1), 10, 64)
+		if err != nil{
+			return err
+		}
+
+		message := []byte(strconv.FormatInt(number, 10))
 		hashed := sha256.Sum256(message)
 
 		signature, err := rsa.SignPKCS1v15(rand.Reader, certificate.PrivateKey.(*rsa.PrivateKey), crypto.SHA256, hashed[:])
 		if err != nil {
 			panic(err)
 		}
-		log.Printf("Sending %d to server", rnd)
+		log.Printf("Sending %d to server", number)
 
-		err = stream.Send(&pb.FindMaxNumberRequest{Number: rnd, Sig:signature})
+		err = stream.Send(&pb.FindMaxNumberRequest{Number: number, Sig:signature})
 		if err != nil {
 			return fmt.Errorf("Could not send data into stream: %v", err)
 		}
+		time.Sleep(time.Millisecond)
 	}
 
 	stream.CloseSend()
