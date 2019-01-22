@@ -24,8 +24,9 @@ How it works
 #### Client Flow:
 1. Connects to the server which opens a stream for sending and receiving data.  
 2. Concurrently starts accepting response from input stream in a goroutine.
-3. Before sending request, client computes signature of request using its private certificate.  
-4. This signature is sent with request to server for validation.  
+3. Starts accepting number from console. For each number it does following:
+   * Before sending request, client computes signature of the number using its private certificate.  
+   * This signature is sent with request to server for validation.  
 
 #### Server Flow:  
 1. Server starts accepting connection from clients.
@@ -58,6 +59,8 @@ For example, you can connect to server running at localhost:50055 with following
 ```
 $ make ARGS="--serverUrl localhost:50055" run-client
 ```
+Client will start asking for numbers to send to the server. Press enter after each number.  
+When you are done entering numbers, you can press ENTER without any input during the prompt.
 
 ####  How to run tests
 You can run test cases using following command:
