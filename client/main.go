@@ -3,6 +3,7 @@ package main
 import (
 	"github.com/sandlis/find-max-number/client/grpc"
 	"log"
+	"time"
 )
 
 func main() {
@@ -17,4 +18,5 @@ func main() {
 	if err != nil{
 		log.Fatal(err)
 	}
+	time.Sleep(2*time.Second)
 }

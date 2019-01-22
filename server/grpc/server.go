@@ -13,6 +13,8 @@ import (
 	"io/ioutil"
 	"crypto/tls"
 	"errors"
+	"strconv"
+	"google.golang.org/grpc/peer"
 )
 
 
@@ -52,15 +54,31 @@ func makeTLS(crtPath, keyPath, caPath string) (credentials.TransportCredentials,
 	}), nil
 }
 
+func GetPkey(stream pb.Numbers_FindMaxNumberServer) (*x509.Certificate, error) {
+	var pkey *x509.Certificate
+	p, ok := peer.FromContext(stream.Context())
+	if ok {
+		tlsInfo := p.AuthInfo.(credentials.TLSInfo)
+		if len(tlsInfo.State.VerifiedChains) == 0 || len(tlsInfo.State.VerifiedChains[0]) == 0{
+			return nil, errors.New("Unable to get certificate to verify signature")
+		}
+		pkey = tlsInfo.State.VerifiedChains[0][0]
+	}
+	return pkey, nil
+}
 
 func (s *Server) FindMaxNumber(stream pb.Numbers_FindMaxNumberServer) error {
+	pkey, err := GetPkey(stream)
+	if err!= nil{
+		return err
+	}
 
 	newClient := false
 	var maxNumberFromClient int64
 
 	for {
 		in, err := stream.Recv()
-		fmt.Println(in)
+
 		if err == io.EOF {
 			return nil
 		}
@@ -68,17 +86,20 @@ func (s *Server) FindMaxNumber(stream pb.Numbers_FindMaxNumberServer) error {
 			return err
 		}
 
-		if newClient{
-			maxNumberFromClient = int64(in.Number)
-			newClient = false
-		}
+		if err = pkey.CheckSignature(x509.SHA256WithRSA, []byte(strconv.FormatInt(in.Number, 10)), in.Sig); err!=nil{
+			fmt.Printf("Ignoring value %v due to invalid signature\n", in.Number)
+		} else {
+			if newClient{
+				maxNumberFromClient = int64(in.Number)
+				newClient = false
+			}
 
-		if in.Number > maxNumberFromClient{
-			maxNumberFromClient = in.Number
-		}
-
-		if err := stream.Send(&pb.FindMaxNumberResponse{MaxNumber: maxNumberFromClient}); err != nil {
-			return err
+			if in.Number > maxNumberFromClient{
+				maxNumberFromClient = in.Number
+				if err := stream.Send(&pb.FindMaxNumberResponse{MaxNumber: maxNumberFromClient}); err != nil {
+					return err
+				}
+			}
 		}
 	}
 }

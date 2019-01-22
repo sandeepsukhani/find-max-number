@@ -13,6 +13,11 @@ import (
 	"crypto/x509"
 	"io/ioutil"
 	"errors"
+	"crypto/sha256"
+	"crypto/rsa"
+	"crypto/rand"
+	"crypto"
+	"strconv"
 )
 
 const (
@@ -20,6 +25,7 @@ const (
 )
 
 var (
+	certificate tls.Certificate
 	grpcConn *grpc.ClientConn
 	crt = "client/certs/client.crt"
 	key = "client/certs/client.key"
@@ -27,7 +33,9 @@ var (
 )
 
 func makeTLS(crtPath, keyPath, caPath string) (credentials.TransportCredentials, error) {
-	certificate, err := tls.LoadX509KeyPair(crtPath, keyPath)
+	var err error
+
+	certificate, err = tls.LoadX509KeyPair(crtPath, keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("Could not load key pair: %s", err)
 	}
@@ -50,27 +58,47 @@ func makeTLS(crtPath, keyPath, caPath string) (credentials.TransportCredentials,
 
 }
 
+func receiveMaxNumber(ctx context.Context, stream pb.Numbers_FindMaxNumberClient) {
+	for {
+		r, err := stream.Recv()
+		if err != nil {
+			if ctx.Err() != context.Canceled {
+				log.Println("Could not receive data from stream: %v", err)
+			}
+			return
+		}
+		log.Printf("Max Number: %d", r.MaxNumber)
+	}
+}
+
 func DoFindMaxNumbersRequest() error {
 	c := pb.NewNumbersClient(grpcConn)
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
 
-	stream, err := c.FindMaxNumber(context.Background())
+	stream, err := c.FindMaxNumber(ctx)
 	if err != nil {
 		return fmt.Errorf("Could not start stream: %v", err)
 	}
 
+	go receiveMaxNumber(ctx, stream)
+
 	for i := 0; i < 5; i++ {
 		rnd := mathRand.Int63n(100000000)
 
-		err = stream.Send(&pb.FindMaxNumberRequest{Number: rnd})
+		message := []byte(strconv.FormatInt(rnd, 10))
+		hashed := sha256.Sum256(message)
+
+		signature, err := rsa.SignPKCS1v15(rand.Reader, certificate.PrivateKey.(*rsa.PrivateKey), crypto.SHA256, hashed[:])
+		if err != nil {
+			panic(err)
+		}
+
+		err = stream.Send(&pb.FindMaxNumberRequest{Number: rnd, Sig:signature})
 		if err != nil {
 			return fmt.Errorf("Could not send data into stream: %v", err)
 		}
 
-		r, err := stream.Recv()
-		if err != nil {
-			return fmt.Errorf("Could not receive data from stream: %v", err)
-		}
-		log.Printf("Max Number: %d", r.MaxNumber)
 		time.Sleep(500*time.Millisecond)
 	}
 

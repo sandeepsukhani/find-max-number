@@ -10,6 +10,7 @@ service Numbers {
 
 message FindMaxNumberRequest {
     int64 number = 1;
+    bytes sig = 2;
 }
 
 message FindMaxNumberResponse {
