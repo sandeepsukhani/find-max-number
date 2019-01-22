@@ -79,11 +79,12 @@ func (s *Server) FindMaxNumber(stream pb.Numbers_FindMaxNumberServer) error {
 	for {
 		in, err := stream.Recv()
 
-		if err == io.EOF {
-			return nil
-		}
 		if err != nil {
-			return err
+			if err == io.EOF {
+				return nil
+			} else {
+				return err
+			}
 		}
 
 		if err = pkey.CheckSignature(x509.SHA256WithRSA, []byte(strconv.FormatInt(in.Number, 10)), in.Sig); err!=nil{

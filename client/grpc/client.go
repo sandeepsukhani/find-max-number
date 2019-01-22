@@ -3,7 +3,6 @@ package grpc
 import (
 	"google.golang.org/grpc"
 	"log"
-	"time"
 	mathRand "math/rand"
 	pb "github.com/sandlis/find-max-number/proto"
 	"context"
@@ -18,6 +17,8 @@ import (
 	"crypto/rand"
 	"crypto"
 	"strconv"
+	"time"
+	"io"
 )
 
 const (
@@ -62,12 +63,12 @@ func receiveMaxNumber(ctx context.Context, stream pb.Numbers_FindMaxNumberClient
 	for {
 		r, err := stream.Recv()
 		if err != nil {
-			if ctx.Err() != context.Canceled {
-				log.Println("Could not receive data from stream: %v", err)
+			if ctx.Err() != context.Canceled && err != io.EOF {
+				log.Printf("Could not receive data from stream: %v", err)
 			}
 			return
 		}
-		log.Printf("Max Number: %d", r.MaxNumber)
+		log.Printf("Max Number so far: %d", r.MaxNumber)
 	}
 }
 
@@ -93,14 +94,18 @@ func DoFindMaxNumbersRequest() error {
 		if err != nil {
 			panic(err)
 		}
+		log.Printf("Sending %d to server", rnd)
 
 		err = stream.Send(&pb.FindMaxNumberRequest{Number: rnd, Sig:signature})
 		if err != nil {
 			return fmt.Errorf("Could not send data into stream: %v", err)
 		}
-
-		time.Sleep(500*time.Millisecond)
 	}
+
+	stream.CloseSend()
+
+	// Waiting for receiving any pending messages from server before stream gets closed due to cancellation of context
+	time.Sleep(time.Millisecond)
 
 	return nil
 }
