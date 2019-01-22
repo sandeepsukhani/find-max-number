@@ -56,15 +56,18 @@ func makeTLS(crtPath, keyPath, caPath string) (credentials.TransportCredentials,
 }
 
 func receiveMaxNumber(ctx context.Context, stream pb.Numbers_FindMaxNumberClient) {
+	var maxNumber int64
 	for {
 		r, err := stream.Recv()
 		if err != nil {
-			if ctx.Err() != context.Canceled && err != io.EOF {
-				log.Printf("Could not receive data from stream: %v", err)
+			if ctx.Err() == context.Canceled || err == io.EOF {
+				log.Printf("Final Max Number: %d", maxNumber)
+				return
 			}
-			return
+			log.Printf("Could not receive data from stream: %v", err)
 		}
-		log.Printf("Max Number so far: %d", r.MaxNumber)
+		maxNumber = r.MaxNumber
+		log.Printf("Max Number so far: %d", maxNumber)
 	}
 }
 
@@ -80,8 +83,10 @@ func DoFindMaxNumbersRequest() error {
 
 	go receiveMaxNumber(ctx, stream)
 
+	randomNumberGenerator := mathRand.New(mathRand.NewSource(time.Now().UnixNano()))
+
 	for i := 0; i < 5; i++ {
-		rnd := mathRand.Int63n(100000000)
+		rnd := randomNumberGenerator.Int63n(1000)
 
 		message := []byte(strconv.FormatInt(rnd, 10))
 		hashed := sha256.Sum256(message)
