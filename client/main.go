@@ -1,9 +1,20 @@
 package main
 
-import "github.com/sandlis/find-max-number/client/grpc"
+import (
+	"github.com/sandlis/find-max-number/client/grpc"
+	"log"
+)
 
 func main() {
-	grpc.Connect()
+	err := grpc.Connect()
+	if err != nil{
+		log.Fatal(err)
+	}
+
 	defer grpc.Close()
-	grpc.DoFindMaxNumbersRequest()
+
+	err = grpc.DoFindMaxNumbersRequest()
+	if err != nil{
+		log.Fatal(err)
+	}
 }

@@ -9,6 +9,10 @@ import (
 	"net"
 	"fmt"
 	"google.golang.org/grpc/credentials"
+	"crypto/x509"
+	"io/ioutil"
+	"crypto/tls"
+	"errors"
 )
 
 
@@ -20,7 +24,33 @@ type Server struct{
 var (
 	crt = "server/certs/server.crt"
 	key = "server/certs/server.key"
+	ca  = "server/certs/ca.crt"
 )
+
+func makeTLS(crtPath, keyPath, caPath string) (credentials.TransportCredentials, error) {
+	certificate, err := tls.LoadX509KeyPair(crtPath, keyPath)
+	if err != nil {
+		return nil, fmt.Errorf("Could not load key pair: %s", err)
+	}
+
+	// Create a certificate pool from the certificate authority
+	certPool := x509.NewCertPool()
+	ca, err := ioutil.ReadFile(caPath)
+	if err != nil {
+		return nil, fmt.Errorf("Could not read ca certificate: %s", err)
+	}
+
+	// Append the certificates from the CA
+	if ok := certPool.AppendCertsFromPEM(ca); !ok {
+		return nil, errors.New("Failed to append ca certs")
+	}
+
+	return credentials.NewTLS(&tls.Config{
+		Certificates: []tls.Certificate{certificate},
+		ClientCAs:      certPool,
+		ClientAuth:   tls.RequireAndVerifyClientCert,
+	}), nil
+}
 
 
 func (s *Server) FindMaxNumber(stream pb.Numbers_FindMaxNumberServer) error {
@@ -56,7 +86,10 @@ func (s *Server) FindMaxNumber(stream pb.Numbers_FindMaxNumberServer) error {
 func NewServer(port string) (*Server, error) {
 	srv := Server{}
 
-	creds, err := credentials.NewServerTLSFromFile(crt, key)
+	creds, err := makeTLS(crt, key, ca)
+	if err != nil {
+		return nil, err
+	}
 
 	srv.grpcSrv = grpc.NewServer(
 		grpc.Creds(creds),
