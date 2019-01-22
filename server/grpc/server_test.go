@@ -104,68 +104,15 @@ func bufDialer(string, time.Duration) (net.Conn, error) {
 	return lis.Dial()
 }
 
-func TestFindMaxNumberServerValidSign(t *testing.T) {
-	input := []int64{1,5,3,6,2,20}
-	expected := []int64{1,5,6,20}
-	var actual []int64
-
-	creds := makeClientTLS()
-
-	conn, err := grpc.Dial("localhost", grpc.WithDialer(bufDialer), grpc.WithTransportCredentials(creds))
-	if err != nil {
-		t.Fatalf("Failed to dial bufnet: %v", err)
-	}
-	defer conn.Close()
-
-	ctx, cancel := context.WithCancel(context.Background())
-	defer cancel()
-
-	c := pb.NewNumbersClient(conn)
-	stream, err := c.FindMaxNumber(ctx)
-	if err != nil {
-		t.Fatalf("Could not start stream: %v", err)
-	}
-
-	for _, v := range input{
-
-		message := []byte(strconv.FormatInt(v, 10))
-		hashed := sha256.Sum256(message)
-
-		signature, err := rsa.SignPKCS1v15(rand.Reader, certificate.PrivateKey.(*rsa.PrivateKey), crypto.SHA256, hashed[:])
-		if err != nil {
-			panic(err)
-		}
-
-		err = stream.Send(&pb.FindMaxNumberRequest{Number: int64(v), Sig: signature})
-		if err != nil {
-			log.Fatalf("Could not send data into stream: %v", err)
-		}
-	}
-
-	stream.CloseSend()
-
-	for {
-		r, err := stream.Recv()
-		if err != nil {
-			if ctx.Err() == context.Canceled || err == io.EOF {
-				break
-			}
-			t.Fatalf("Could not receive data from stream: %v", err)
-		}
-		actual = append(actual, r.MaxNumber)
-	}
-
-	if !reflect.DeepEqual(expected, actual){
-		t.Fatalf("Expected: %v, Received: %v", expected, actual)
-	}
+type TestCaseData struct {
+	input []int64
+	expected []int64
+	signatures [][]byte
 }
 
 
-func TestFindMaxNumberServerInvalidSign(t *testing.T) {
-	input := []int64{1,5,3,6,99,20}
-	expected := []int64{1,5,6,20}
+func runRequestReponseTest(td *TestCaseData, t *testing.T){
 	var actual []int64
-	var signature []byte
 
 	creds := makeClientTLS()
 
@@ -184,14 +131,15 @@ func TestFindMaxNumberServerInvalidSign(t *testing.T) {
 		t.Fatalf("Could not start stream: %v", err)
 	}
 
-	for i, v := range input{
+	var signature []byte
+
+	for i, v := range td.input{
 
 		message := []byte(strconv.FormatInt(v, 10))
 		hashed := sha256.Sum256(message)
-
-		if i == 4{
-			signature = []byte{1, 2, 3}
-		} else {
+		if len(td.signatures) >= i+1 && len(td.signatures[i]) != 0{
+			signature = td.signatures[i]
+		}else {
 			signature, err = rsa.SignPKCS1v15(rand.Reader, certificate.PrivateKey.(*rsa.PrivateKey), crypto.SHA256, hashed[:])
 			if err != nil {
 				panic(err)
@@ -217,7 +165,30 @@ func TestFindMaxNumberServerInvalidSign(t *testing.T) {
 		actual = append(actual, r.MaxNumber)
 	}
 
-	if !reflect.DeepEqual(expected, actual){
-		t.Fatalf("Expected: %v, Received: %v", expected, actual)
+	if !reflect.DeepEqual(td.expected, actual){
+		t.Fatalf("Expected: %v, Received: %v", td.expected, actual)
 	}
+}
+
+func TestFindMaxNumberServerValidSign(t *testing.T) {
+	td := new(TestCaseData)
+	td.input = []int64{1,5,3,6,2,20}
+	td.expected = []int64{1,5,6,20}
+
+	runRequestReponseTest(td, t)
+}
+
+
+func TestFindMaxNumberServerInvalidSign(t *testing.T) {
+
+	td := new(TestCaseData)
+	td.input = []int64{1,5,3,6,99,20}
+	td.expected = []int64{1,5,6,20}
+
+	signatures := [6][]byte{}
+	td.signatures = signatures[:]
+	td.signatures[4] = []byte{1, 2, 3}
+
+	runRequestReponseTest(td, t)
+
 }
